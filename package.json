@@ -1,0 +1,7 @@
+{
+  "name": "pongbot",
+  "private": true,
+  "scripts": {
+    "start": "node scripts/serve.js"
+  }
+}
