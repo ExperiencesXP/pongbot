@@ -138,13 +138,7 @@ function listAIPresetsSafe() {
     const listed = PongAI.list();
     if (Array.isArray(listed) && listed.length) return listed;
   }
-  if (typeof listAIPresets === 'function') {
-    const listed = listAIPresets();
-    if (Array.isArray(listed) && listed.length) return listed;
-  }
-  return PRESETS.map(function (id) {
-    return { id: id, label: id };
-  });
+  return [];
 }
 
 function fillSelect(sel, presets, current) {
@@ -189,6 +183,10 @@ function showMenu() {
 
 function startMatch() {
   if (match.state !== 'menu' && match.state !== 'over') return;
+  if (!listAIPresetsSafe().length) {
+    console.error('Ingen AI indlæst. Kør npm start og åbn http://127.0.0.1:<port>/');
+    return;
+  }
 
   const leftSel = document.getElementById('left-ai');
   const rightSel = document.getElementById('right-ai');
@@ -299,15 +297,7 @@ function knownPresets() {
     const listed = PongAI.list();
     if (Array.isArray(listed) && listed.length) return listed;
   }
-  if (typeof listAIPresets === 'function') {
-    const listed = listAIPresets();
-    if (Array.isArray(listed) && listed.length) return listed;
-  }
-  if (typeof AI_PRESETS === 'object' && AI_PRESETS) {
-    const keys = Object.keys(AI_PRESETS);
-    if (keys.length) return keys;
-  }
-  return PRESETS;
+  return [];
 }
 
 function presetIdOf(value) {

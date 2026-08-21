@@ -62,8 +62,10 @@ const PongAI = (function () {
   }
 
   function create(id) {
-    const e = byId[id] || byId.simple || registry[0];
+    const key = String(id || '').trim();
+    const e = byId[key] || byId[key.toLowerCase()] || byId.simple || registry[0];
     if (!e) {
+      console.warn('PongAI.create: ukendt id "' + key + '". Indlæst:', Object.keys(byId).join(', ') || '(ingen)');
       return {
         id: 'none',
         label: 'None',
@@ -73,7 +75,20 @@ const PongAI = (function () {
         reset: function () {},
       };
     }
-    const inst = e.create() || {};
+    let inst;
+    try {
+      inst = e.create() || {};
+    } catch (err) {
+      console.error('PongAI.create failed for ' + e.id, err);
+      return {
+        id: e.id,
+        label: e.label,
+        think: function (input) {
+          return { targetY: input.self.y + input.self.h * 0.5 };
+        },
+        reset: function () {},
+      };
+    }
     inst.id = e.id;
     inst.label = e.label;
     if (typeof inst.reset !== 'function') inst.reset = function () {};
@@ -138,11 +153,12 @@ const PongAI = (function () {
 
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
+      const url = new URL(src, document.baseURI).href;
       const s = document.createElement('script');
-      s.src = src;
+      s.src = url;
       s.async = false;
       s.onload = function () { resolve(); };
-      s.onerror = function () { reject(new Error('Could not load ' + src)); };
+      s.onerror = function () { reject(new Error('Could not load ' + url)); };
       document.head.appendChild(s);
     });
   }
@@ -159,34 +175,45 @@ const PongAI = (function () {
   }
 
   async function discover() {
-    try {
-      const r = await fetch('ai/manifest.json', { cache: 'no-store' });
-      if (r.ok) {
-        const j = await r.json();
-        if (j && Array.isArray(j.files) && j.files.length) return j.files;
+    const found = [];
+    const seen = Object.create(null);
+    function add(list) {
+      if (!list || !list.length) return;
+      for (let i = 0; i < list.length; i++) {
+        const f = String(list[i] || '').replace(/^.*[\\/]/, '');
+        if (!f || f.charAt(0) === '_' || seen[f]) continue;
+        seen[f] = true;
+        found.push(f);
       }
-    } catch (e) {}
-
-    if (Array.isArray(window.__AI_FILES__) && window.__AI_FILES__.length) {
-      return window.__AI_FILES__;
     }
 
-    try {
-      const r2 = await fetch('ai/', { cache: 'no-store' });
-      if (r2.ok) {
-        const listed = listFromDirHtml(await r2.text());
-        if (listed.length) return listed;
-      }
-    } catch (e2) {}
+    add(window.__AI_FILES__);
 
-    return [];
+    try {
+      const extra = await Promise.race([
+        fetch(new URL('ai/manifest.json', document.baseURI).href, { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : {}; }),
+        new Promise(function (resolve) {
+          setTimeout(function () { resolve({}); }, 1000);
+        }),
+      ]);
+      add(extra && extra.files);
+    } catch (e) {}
+
+    if (!found.length) {
+      try {
+        const r2 = await fetch(new URL('ai/', document.baseURI).href, { cache: 'no-store' });
+        if (r2.ok) add(listFromDirHtml(await r2.text()));
+      } catch (e2) {}
+    }
+
+    return found;
   }
 
   async function boot() {
     const files = await discover();
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      if (!f || f.charAt(0) === '_') continue;
       const snap = snapshotGlobals();
       try {
         await loadScript('ai/' + f);
@@ -197,7 +224,7 @@ const PongAI = (function () {
       harvestLegacy(f, snap);
     }
     if (!registry.length) {
-      console.warn('PongAI: no AIs loaded. Run `npm start` so /ai/manifest.json can list the folder.');
+      console.warn('PongAI: ingen AI-filer blev indlæst. Kør npm start og åbn http://127.0.0.1:PORT/');
     }
   }
 
